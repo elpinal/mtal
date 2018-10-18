@@ -23,6 +23,8 @@ module TAL
 
   , TypeBinding(..)
 
+  , H(..)
+
   -- * Errors
   , TypeError(..)
   ) where
