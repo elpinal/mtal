@@ -32,11 +32,13 @@ import qualified Data.Map.Lazy as Map
 
 import qualified MTAL as M
 
+-- | An instruction.
 data Inst
   = Mov Reg Operand
   | Add Reg Reg Operand
   deriving (Eq, Show)
 
+-- | A register.
 newtype Reg = Reg Int
   deriving (Eq, Ord, Show)
 
@@ -45,17 +47,20 @@ data Operand
   | Value Val
   deriving (Eq, Show)
 
+-- | A value.
 data Val
   = Const Int
   | Label M.Label
   deriving (Eq, Show)
 
+-- | An instruction sequence.
 data Block = Block
   { insts :: [Inst]
   , jmp :: Operand
   }
   deriving (Eq, Show)
 
+-- | A register file.
 newtype File = File (Map.Map Reg Val)
   deriving (Eq, Show)
 
@@ -65,7 +70,7 @@ newtype Heap = Heap (Map.Map M.Label Block)
 data Machine = Machine
   { heap :: Heap
   , file :: File
-  , counter :: Block -- The program counter.
+  , counter :: Block -- ^ The program counter.
   }
   deriving (Eq, Show)
 
