@@ -8,4 +8,4 @@ In the Twenty-Sixth ACM SIGPLAN-SIGACT Symposium on Principles of Programming La
 
 ## Note
 
-The phrase "A modular module system" derives from Xavier Leroy's "A modular module system" (2000).
+The phrase “A modular module system” derives from Xavier Leroy’s “A modular module system” (2000).
