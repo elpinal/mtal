@@ -215,8 +215,9 @@ instance Typing Heap where
       then throwError $ HeapDomainMismatch (Heap h) $ HeapContext hctx
       else sequence_ $ Map.intersectionWith (\t b -> fromCode t >>= (`typeOfBlock` b)) hctx h
 
-fromCode :: Member (Error TypeError) r => Type -> Eff r Context
-fromCode (Code ctx) = return ctx
+-- Returns a well-formed context.
+fromCode :: Members '[Reader KindEnv, Error TypeError] r => Type -> Eff r Context
+fromCode (Code ctx) = wf ctx >> return ctx
 fromCode t = throwError $ NotCode t
 
 instance Typing Machine where
@@ -237,9 +238,10 @@ instance M.Types H where
 
   wfHeap km = getAll . foldMap (\t -> All $ M.kindOf km t ())
 
-  kindOf _ Int () = True
-  kindOf km (Code (Context m)) () = getAll $ foldMap (\t -> All $ M.kindOf km t ()) m
-  kindOf km (TLabel l) () = l `Map.member` km
+  kindOf km t () =
+    case run $ runError $ runReader (KindEnv $ Map.keysSet km) $ wf t of
+      Right () -> True
+      Left e -> let _ = e :: TypeError in False
 
 instance M.Heap H where
   merge h1 h2 = H
@@ -271,3 +273,17 @@ instance M.File File where
 
 instance M.Inst Block where
   jmp l = Block [] $ Value $ Label l
+
+class WellFormed a where
+  wf :: Members '[Reader KindEnv, Error TypeError] r => a -> Eff r ()
+
+instance WellFormed Context where
+  wf (Context m) = mapM_ wf m
+
+instance WellFormed Type where
+  wf Int = return ()
+  wf (Code ctx) = wf ctx
+  wf (TLabel l) = do
+    KindEnv ls <- ask
+    unless (l `Set.member` ls) $
+      throwError $ NoSuchLabelType l

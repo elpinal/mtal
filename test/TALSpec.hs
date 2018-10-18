@@ -63,3 +63,13 @@ spec = do
           , typeDeclH = Map.singleton (M.Label "t") ((), Int)
           }
         }
+
+      M.wf M.ObjectFile
+        { M.imports = mempty
+        , M.exports = mempty
+        , M.heap = H
+          { heapH = Heap $ Map.singleton (M.Label "a") $ Block [Mov (Reg 0) $ Register $ Reg 1] $ Value $ Label $ M.Label "a"
+          , heapContextH = HeapContext $ Map.singleton (M.Label "a") $ Code $ Context $ Map.fromList [(Reg 0, TLabel $ M.Label "none"), (Reg 1, TLabel $ M.Label "none")]
+          , typeDeclH = mempty
+          }
+        } `shouldBe` False
