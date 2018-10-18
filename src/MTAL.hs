@@ -101,7 +101,7 @@ wf :: Heap h => ObjectFile h -> Bool
 wf o = and
   [ interfaceOf (heap o) `isSubinterfaceOf` exports o
   , Map.keysSet (imports o) `Set.disjoint` dom (heap o)
-  , kinding (fmap fst $ typeDecl $ heap o) $ typeDecl $ heap o -- FIXME: missing imports
+  , kinding (getK (imports o) `Map.union` fmap fst (typeDecl $ heap o)) $ typeDecl $ heap o
   -- FIXME: missing a judgment.
   ]
 
