@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module TAL
   (
@@ -75,27 +76,45 @@ type E = '[State Context, Reader HeapContext, Error TypeError]
 -- TODO: better name.
 type HeapLevel = '[Reader HeapContext, Error TypeError]
 
-typeOfRegister :: Members '[State Context, Error TypeError] r => Reg -> Eff r Type
-typeOfRegister r = do
-  Context m <- get
-  maybe (throwError $ UnboundRegister r) return $ Map.lookup r m
+class Typing a where
+  type TypingEffs a :: [* -> *]
+  type Output a
 
-typeOfValue :: Members HeapLevel r => Val -> Eff r Type
-typeOfValue (Const _) = return Int
-typeOfValue (Label l) = do
-  HeapContext m <- ask
-  maybe (throwError $ UnboundLabel l) return $ Map.lookup l m
+  typeOf :: Members (TypingEffs a) r => a -> Eff r (Output a)
 
-typeOfOperand :: Members E r => Operand -> Eff r Type
-typeOfOperand (Register r) = typeOfRegister r
-typeOfOperand (Value v) = typeOfValue v
+instance Typing Reg where
+  type TypingEffs Reg = '[State Context, Error TypeError]
+  type Output Reg = Type
 
-typeOfInst :: Members E r => Inst -> Eff r ()
-typeOfInst (Mov r o) = typeOfOperand o >>= write r
-typeOfInst (Add d s o) = do
-  typeOfRegister s >>= requireInt
-  typeOfOperand o >>= requireInt
-  write d Int
+  typeOf r = do
+    Context m <- get
+    maybe (throwError $ UnboundRegister r) return $ Map.lookup r m
+
+instance Typing Val where
+  type TypingEffs Val = HeapLevel
+  type Output Val = Type
+
+  typeOf (Const _) = return Int
+  typeOf (Label l) = do
+    HeapContext m <- ask
+    maybe (throwError $ UnboundLabel l) return $ Map.lookup l m
+
+instance Typing Operand where
+  type TypingEffs Operand = E
+  type Output Operand = Type
+
+  typeOf (Register r) = typeOf r
+  typeOf (Value v) = typeOf v
+
+instance Typing Inst where
+  type TypingEffs Inst = E
+  type Output Inst = ()
+
+  typeOf (Mov r o) = typeOf o >>= write r
+  typeOf (Add d s o) = do
+    typeOf s >>= requireInt
+    typeOf o >>= requireInt
+    write d Int
 
 write :: Member (State Context) r => Reg -> Type -> Eff r ()
 write r t = modify $ Context . Map.insert r t . getContext
@@ -109,24 +128,33 @@ jmpTo (Code ctx0) = get >>= \ctx -> unless (ctx0 == ctx) $ throwError $ ContextM
 jmpTo t = throwError $ NotCode t
 
 typeOfBlock :: Members HeapLevel r => Context -> Block -> Eff r ()
-typeOfBlock ctx b = evalState ctx $ mapM_ typeOfInst (insts b) >> typeOfOperand (jmp b) >>= jmpTo
+typeOfBlock ctx b = evalState ctx $ mapM_ typeOf (insts b) >> typeOf (jmp b) >>= jmpTo
 
-typeOfFile :: Members HeapLevel r => File -> Eff r Context
-typeOfFile (File f) = Context <$> traverse typeOfValue f
+instance Typing File where
+  type TypingEffs File = HeapLevel
+  type Output File = Context
 
-typeOfHeap :: Members HeapLevel r => Heap -> Eff r ()
-typeOfHeap (Heap h) = do
-  HeapContext hctx <- ask
-  if Map.keysSet h /= Map.keysSet hctx
-    then throwError $ HeapDomainMismatch (Heap h) $ HeapContext hctx
-    else sequence_ $ Map.intersectionWith (\t b -> fromCode t >>= (`typeOfBlock` b)) hctx h
+  typeOf (File f) = Context <$> traverse typeOf f
+
+instance Typing Heap where
+  type TypingEffs Heap = HeapLevel
+  type Output Heap = ()
+
+  typeOf (Heap h) = do
+    HeapContext hctx <- ask
+    if Map.keysSet h /= Map.keysSet hctx
+      then throwError $ HeapDomainMismatch (Heap h) $ HeapContext hctx
+      else sequence_ $ Map.intersectionWith (\t b -> fromCode t >>= (`typeOfBlock` b)) hctx h
 
 fromCode :: Member (Error TypeError) r => Type -> Eff r Context
 fromCode (Code ctx) = return ctx
 fromCode t = throwError $ NotCode t
 
-wfMachine :: Members HeapLevel r => Machine -> Eff r ()
-wfMachine m = do
-  typeOfHeap $ heap m
-  ctx <- typeOfFile $ file m
-  typeOfBlock ctx $ counter m
+instance Typing Machine where
+  type TypingEffs Machine = HeapLevel
+  type Output Machine = ()
+
+  typeOf m = do
+    typeOf $ heap m
+    ctx <- typeOf $ file m
+    typeOfBlock ctx $ counter m
