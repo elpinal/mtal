@@ -3,7 +3,24 @@
 {-# LANGUAGE TypeFamilies #-}
 
 module TAL
-  (
+  ( Typing(..)
+
+  , Machine(..)
+  , Heap(..)
+  , File(..)
+
+  , Block(..)
+  , Reg(..)
+  , Val(..)
+  , Inst(..)
+  , Operand(..)
+
+  , Type(..)
+  , HeapContext(..)
+  , Context(..)
+
+  -- * Errors
+  , TypeError(..)
   ) where
 
 import Control.Monad
