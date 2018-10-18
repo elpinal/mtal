@@ -98,11 +98,12 @@ isSubinterfaceOf i1 i2 = (getK i1 `isSubKindEnvOf` getK i2) && Map.isSubmapOfBy 
 
 -- | Determines well-formedness.
 wf :: Heap h => ObjectFile h -> Bool
-wf o = and
+wf o = let kenv = getK (imports o) `Map.union` fmap fst (typeDecl $ heap o) in
+  and
   [ interfaceOf (heap o) `isSubinterfaceOf` exports o
   , Map.keysSet (imports o) `Set.disjoint` dom (heap o)
-  , kinding (getK (imports o) `Map.union` fmap fst (typeDecl $ heap o)) $ typeDecl $ heap o
-  -- FIXME: missing a judgment.
+  , kinding kenv $ typeDecl $ heap o
+  , typeOf kenv (fmap snd $ typeDecl $ heap o) (getT (imports o) `Map.union` getT (interfaceOf $ heap o)) $ heap o
   ]
 
 compatibleInterface :: Types h => Interface h -> Interface h -> Bool
