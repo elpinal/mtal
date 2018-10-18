@@ -1,5 +1,8 @@
 # A modular module system for typed assembly languages
 
+The implementation of a module system for typed assembly languages.
+It is parameterized by core typed assembly languages: see the type class `Heap` in `src/MTAL.hs`.
+
 ## Reference
 
 Neal Glew and Greg Morrisett.  
