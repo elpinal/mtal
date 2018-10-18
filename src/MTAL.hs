@@ -101,7 +101,8 @@ wf :: Heap h => ObjectFile h -> Bool
 wf o = and
   [ interfaceOf (heap o) `isSubinterfaceOf` exports o
   , Map.keysSet (imports o) `Set.disjoint` dom (heap o)
-  , kinding (fmap fst $ typeDecl $ heap o) $ typeDecl $ heap o
+  , kinding (fmap fst $ typeDecl $ heap o) $ typeDecl $ heap o -- FIXME: missing imports
+  -- FIXME: missing a judgment.
   ]
 
 compatibleInterface :: Types h => Interface h -> Interface h -> Bool
