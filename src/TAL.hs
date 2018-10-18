@@ -105,6 +105,7 @@ data TypeError
   | ContextMismatch Context Context
   | NoSuchLabelType M.Label
   | CouldNotRoll Type M.Label
+  deriving (Eq, Show)
 
 type E = '[State Context, Reader HeapContext, Error TypeError]
 
