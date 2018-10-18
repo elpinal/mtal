@@ -1,5 +1,6 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE TypeOperators #-}
 
@@ -71,12 +72,19 @@ newtype File = File (Map.Map Reg Val)
   deriving (Eq, Show)
 
 newtype Heap = Heap (Map.Map M.Label Block)
-  deriving (Eq, Show)
+  deriving (Eq, Show, Semigroup)
 
 data Machine = Machine
   { heap :: Heap
   , file :: File
   , counter :: Block -- ^ The program counter.
+  }
+  deriving (Eq, Show)
+
+data H = H
+  { heapH :: Heap
+  , heapContextH :: HeapContext
+  , typeDeclH :: Map.Map M.Label ((), Type)
   }
   deriving (Eq, Show)
 
@@ -89,8 +97,8 @@ data Type
 newtype Context = Context { getContext :: Map.Map Reg Type }
   deriving (Eq, Show)
 
-newtype HeapContext = HeapContext (Map.Map M.Label Type)
-  deriving (Eq, Show)
+newtype HeapContext = HeapContext { getHeapContext :: Map.Map M.Label Type }
+  deriving (Eq, Show, Semigroup)
 
 newtype TypeBinding = TypeBinding (Map.Map M.Label Type)
   deriving (Eq, Show)
@@ -111,6 +119,9 @@ type E = '[State Context, Reader HeapContext, Error TypeError]
 
 -- TODO: better name.
 type HeapLevel = '[Reader HeapContext, Error TypeError]
+
+runHeapLevel :: HeapContext -> Eff (Reader HeapContext ': Error TypeError ': r) a -> Eff r (Either TypeError a)
+runHeapLevel r e = runError $ runReader r e
 
 class Typing a where
   type TypingEffs a :: [* -> *]
@@ -211,9 +222,9 @@ instance Typing Machine where
     ctx <- typeOf $ file m
     typeOfBlock ctx $ counter m
 
-instance M.Types Heap where
-  type Type Heap = Type
-  type Kind Heap = ()
+instance M.Types H where
+  type Type H = Type
+  type Kind H = ()
 
   equalK () () = True
   equal = (==)
@@ -223,3 +234,28 @@ instance M.Types Heap where
   kindOf _ Int () = True
   kindOf km (Code (Context m)) () = getAll $ foldMap (\t -> All $ M.kindOf km t ()) m
   kindOf km (TLabel l) () = l `Map.member` km
+
+instance M.Heap H where
+  merge h1 h2 = H
+    { heapH = heapH h1 <> heapH h2
+    , heapContextH = heapContextH h1 <> heapContextH h2
+    , typeDeclH = typeDeclH h1 <> typeDeclH h2
+    }
+
+  entryConform h l =
+    case Map.lookup l $ getHeapContext $ heapContextH h of
+      Just (Code (Context m)) -> Map.null m
+      Just _ -> False
+      Nothing -> False
+
+  typeDecl = typeDeclH
+
+  interfaceOf h =
+    let kenv = M.K . fst <$> typeDeclH h in
+    let tenv = fmap M.T . getHeapContext $ heapContextH h in
+    Map.union kenv tenv -- Notice: assume these are distinct.
+
+  typeOf _ tbind tenv h =
+    case run $ runReader (TypeBinding tbind) $ runHeapLevel (HeapContext tenv) $ typeOf (heapH h) of
+      Right () -> True
+      Left _ -> False
