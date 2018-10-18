@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE TypeOperators #-}
 
 module TAL
   ( Typing(..)
@@ -18,6 +19,8 @@ module TAL
   , Type(..)
   , HeapContext(..)
   , Context(..)
+
+  , TypeBinding(..)
 
   -- * Errors
   , TypeError(..)
@@ -51,6 +54,8 @@ data Operand
 data Val
   = Const Int
   | Label M.Label
+  | Roll M.Label Val
+  | Unroll Val
   deriving (Eq, Show)
 
 -- | An instruction sequence.
@@ -77,6 +82,7 @@ data Machine = Machine
 data Type
   = Int
   | Code Context
+  | TLabel M.Label
   deriving (Eq, Show)
 
 newtype Context = Context { getContext :: Map.Map Reg Type }
@@ -85,13 +91,19 @@ newtype Context = Context { getContext :: Map.Map Reg Type }
 newtype HeapContext = HeapContext (Map.Map M.Label Type)
   deriving (Eq, Show)
 
+newtype TypeBinding = TypeBinding (Map.Map M.Label Type)
+  deriving (Eq, Show)
+
 data TypeError
   = UnboundRegister Reg
   | UnboundLabel M.Label
   | NotInt Type
   | NotCode Type
+  | NotLabel Type
   | HeapDomainMismatch Heap HeapContext
   | ContextMismatch Context Context
+  | NoSuchLabelType M.Label
+  | CouldNotRoll Type M.Label
 
 type E = '[State Context, Reader HeapContext, Error TypeError]
 
@@ -102,7 +114,7 @@ class Typing a where
   type TypingEffs a :: [* -> *]
   type Output a
 
-  typeOf :: Members (TypingEffs a) r => a -> Eff r (Output a)
+  typeOf :: Members (Reader TypeBinding ': TypingEffs a) r => a -> Eff r (Output a)
 
 instance Typing Reg where
   type TypingEffs Reg = '[State Context, Error TypeError]
@@ -120,6 +132,22 @@ instance Typing Val where
   typeOf (Label l) = do
     HeapContext m <- ask
     maybe (throwError $ UnboundLabel l) return $ Map.lookup l m
+  typeOf (Roll l v) = do
+    t1 <- typeOf v
+    TypeBinding m <- ask
+    t2 <- maybe (throwError $ NoSuchLabelType l) return $ Map.lookup l m
+    if t1 == t2
+      then return $ TLabel l
+      else throwError $ CouldNotRoll t1 l
+  typeOf (Unroll v) = do
+    t <- typeOf v
+    TypeBinding m <- ask
+    l <- fromLabel t
+    maybe (throwError $ NoSuchLabelType l) return $ Map.lookup l m
+
+fromLabel :: Member (Error TypeError) r => Type -> Eff r M.Label
+fromLabel (TLabel l) = return l
+fromLabel t = throwError $ NotLabel t
 
 instance Typing Operand where
   type TypingEffs Operand = E
@@ -149,7 +177,7 @@ jmpTo :: Members '[State Context, Error TypeError] r => Type -> Eff r ()
 jmpTo (Code ctx0) = get >>= \ctx -> unless (ctx0 == ctx) $ throwError $ ContextMismatch ctx0 ctx
 jmpTo t = throwError $ NotCode t
 
-typeOfBlock :: Members HeapLevel r => Context -> Block -> Eff r ()
+typeOfBlock :: Members (Reader TypeBinding ': HeapLevel) r => Context -> Block -> Eff r ()
 typeOfBlock ctx b = evalState ctx $ mapM_ typeOf (insts b) >> typeOf (jmp b) >>= jmpTo
 
 instance Typing File where
