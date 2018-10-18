@@ -36,6 +36,7 @@ import Control.Monad.Freer.Reader
 import Control.Monad.Freer.State
 import qualified Data.Map.Lazy as Map
 import Data.Monoid
+import qualified Data.Set as Set
 
 import qualified MTAL as M
 
@@ -105,6 +106,9 @@ newtype HeapContext = HeapContext { getHeapContext :: Map.Map M.Label Type }
 newtype TypeBinding = TypeBinding (Map.Map M.Label Type)
   deriving (Eq, Show)
 
+newtype KindEnv = KindEnv (Set.Set M.Label)
+  deriving (Eq, Show)
+
 data TypeError
   = UnboundRegister Reg
   | UnboundLabel M.Label
@@ -129,7 +133,7 @@ class Typing a where
   type TypingEffs a :: [* -> *]
   type Output a
 
-  typeOf :: Members (Reader TypeBinding ': TypingEffs a) r => a -> Eff r (Output a)
+  typeOf :: Members (Reader KindEnv ':Reader TypeBinding ': TypingEffs a) r => a -> Eff r (Output a)
 
 instance Typing Reg where
   type TypingEffs Reg = '[State Context, Error TypeError]
@@ -192,7 +196,7 @@ jmpTo :: Members '[State Context, Error TypeError] r => Type -> Eff r ()
 jmpTo (Code ctx0) = get >>= \ctx -> unless (ctx0 == ctx) $ throwError $ ContextMismatch ctx0 ctx
 jmpTo t = throwError $ NotCode t
 
-typeOfBlock :: Members (Reader TypeBinding ': HeapLevel) r => Context -> Block -> Eff r ()
+typeOfBlock :: Members (Reader KindEnv ': Reader TypeBinding ': HeapLevel) r => Context -> Block -> Eff r ()
 typeOfBlock ctx b = evalState ctx $ mapM_ typeOf (insts b) >> typeOf (jmp b) >>= jmpTo
 
 instance Typing File where
@@ -257,8 +261,8 @@ instance M.Heap H where
     let tenv = fmap M.T . getHeapContext $ heapContextH h in
     Map.union kenv tenv -- Notice: assume these are distinct.
 
-  typeOf _ tbind tenv h =
-    case run $ runReader (TypeBinding tbind) $ runHeapLevel (HeapContext tenv) $ typeOf (heapH h) of
+  typeOf kenv tbind tenv h =
+    case run $ runReader (KindEnv $ Map.keysSet kenv) $ runReader (TypeBinding tbind) $ runHeapLevel (HeapContext tenv) $ typeOf (heapH h) of
       Right () -> True
       Left _ -> False
 
