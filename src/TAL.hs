@@ -32,6 +32,7 @@ import Control.Monad.Freer.Error
 import Control.Monad.Freer.Reader
 import Control.Monad.Freer.State
 import qualified Data.Map.Lazy as Map
+import Data.Monoid
 
 import qualified MTAL as M
 
@@ -208,3 +209,16 @@ instance Typing Machine where
     typeOf $ heap m
     ctx <- typeOf $ file m
     typeOfBlock ctx $ counter m
+
+instance M.Types Heap where
+  type Type Heap = Type
+  type Kind Heap = ()
+
+  equalK () () = True
+  equal = (==)
+
+  wfHeap km = getAll . foldMap (\t -> All $ M.kindOf km t ())
+
+  kindOf _ Int () = True
+  kindOf km (Code (Context m)) () = getAll $ foldMap (\t -> All $ M.kindOf km t ()) m
+  kindOf km (TLabel l) () = l `Map.member` km
