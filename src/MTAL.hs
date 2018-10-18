@@ -66,7 +66,7 @@ class Types h where
   equal :: Type h -> Type h -> Bool
   equalK :: Kind h -> Kind h -> Bool
 
-  wfHeap :: Map.Map Label (Kind h) -> Map.Map Label (Type h) -> Bool
+  wfHeap :: Map.Map Label (Kind h) -> [Type h] -> Bool
   kindOf :: Map.Map Label (Kind h) -> Type h -> Kind h -> Bool
 
 dom :: Heap h => h -> Set.Set Label
@@ -137,7 +137,7 @@ link o1 o2 =
 
 executable :: Heap h => h -> Label -> Bool
 executable h entry = and
-  [ wfHeap (getK $ interfaceOf h) (getT $ interfaceOf h)
+  [ wfHeap (getK $ interfaceOf h) (Map.elems $ getT $ interfaceOf h)
   , kinding (fmap fst $ typeDecl h) (typeDecl h)
   , typeOf (fst <$> typeDecl h) (snd <$> typeDecl h) (getT $ interfaceOf h) h
   , entryConform h entry
