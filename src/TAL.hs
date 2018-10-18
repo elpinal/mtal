@@ -68,7 +68,6 @@ data TypeError
   | NotInt Type
   | NotCode Type
   | HeapDomainMismatch Heap HeapContext
-  | TypeMismatch Type Type
   | ContextMismatch Context Context
 
 type E = '[State Context, Reader HeapContext, Error TypeError]
