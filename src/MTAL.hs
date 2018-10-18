@@ -88,7 +88,7 @@ data ObjectFile h = ObjectFile
   }
 
 kinding :: Types h => Map.Map Label (Kind h) -> TypeDecl h -> Bool
-kinding m i = getAll $ foldMap (\(k, t) -> All $ kindOf m t k) $ Map.elems i
+kinding m = getAll . foldMap (\(k, t) -> All $ kindOf m t k) . Map.elems
 
 isSubKindEnvOf :: Types h => Map.Map Label (Kind h) -> Map.Map Label (Kind h) -> Bool
 isSubKindEnvOf = flip $ Map.isSubmapOfBy equalK
