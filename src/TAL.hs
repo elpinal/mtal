@@ -259,3 +259,9 @@ instance M.Heap H where
     case run $ runReader (TypeBinding tbind) $ runHeapLevel (HeapContext tenv) $ typeOf (heapH h) of
       Right () -> True
       Left _ -> False
+
+instance M.File File where
+  emptyFile = File mempty
+
+instance M.Inst Block where
+  jmp l = Block [] $ Value $ Label l
