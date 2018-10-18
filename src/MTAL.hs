@@ -79,7 +79,7 @@ class Inst i where
   jmp :: Label -> i
 
 newtype Label = Label String
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Show)
 
 data ObjectFile h = ObjectFile
   { heap :: h
