@@ -115,7 +115,7 @@ data TypeError
   | NotInt Type
   | NotCode Type
   | NotLabel Type
-  | HeapDomainMismatch Heap HeapContext
+  | MissingHeapTypeInformation Heap HeapContext
   | ContextMismatch Context Context
   | NoSuchLabelType M.Label
   | CouldNotRoll Type M.Label
@@ -211,9 +211,9 @@ instance Typing Heap where
 
   typeOf (Heap h) = do
     HeapContext hctx <- ask
-    if Map.keysSet h /= Map.keysSet hctx
-      then throwError $ HeapDomainMismatch (Heap h) $ HeapContext hctx
-      else sequence_ $ Map.intersectionWith (\t b -> fromCode t >>= (`typeOfBlock` b)) hctx h
+    if Map.keysSet h `Set.isSubsetOf` Map.keysSet hctx
+      then sequence_ $ Map.intersectionWith (\t b -> fromCode t >>= (`typeOfBlock` b)) hctx h
+      else throwError $ MissingHeapTypeInformation (Heap h) $ HeapContext hctx
 
 -- Returns a well-formed context.
 fromCode :: Members '[Reader KindEnv, Error TypeError] r => Type -> Eff r Context
